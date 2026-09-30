@@ -195,7 +195,7 @@ final class BenchyUITests: XCTestCase {
 
         app.buttons["Fixture credentials"].tap()
         app.buttons["ben-chy-fixture-clear"].tap()
-        let signedOut = NSPredicate(format: "label CONTAINS %@", "Signed out")
+        let signedOut = NSPredicate(format: "label == %@", "Protected fixture: Signed out")
         expectation(for: signedOut, evaluatedWith: replacementRecovered)
         waitForExpectations(timeout: 10)
         app.terminate()
@@ -213,7 +213,7 @@ final class BenchyUITests: XCTestCase {
         app.buttons["Fixture credentials"].tap()
         app.buttons["ben-chy-fixture-clear"].tap()
         let username = element(app, "ben-chy-protected-username")
-        let signedOut = NSPredicate(format: "label CONTAINS %@", "Signed out")
+        let signedOut = NSPredicate(format: "label == %@", "Protected fixture: Signed out")
         expectation(for: signedOut, evaluatedWith: username)
         waitForExpectations(timeout: 10)
 
@@ -264,7 +264,7 @@ final class BenchyUITests: XCTestCase {
         waitForExpectations(timeout: 10)
         app.buttons["Fixture credentials"].tap()
         app.buttons["ben-chy-fixture-clear"].tap()
-        let signedOut = NSPredicate(format: "label CONTAINS %@", "Signed out")
+        let signedOut = NSPredicate(format: "label == %@", "Protected fixture: Signed out")
         expectation(for: signedOut, evaluatedWith: pendingUsername)
         waitForExpectations(timeout: 10)
         app.buttons["Fixture credentials"].tap()

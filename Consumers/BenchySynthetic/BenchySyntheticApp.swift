@@ -89,7 +89,9 @@ private struct BenchySyntheticHost: View {
                         }
                         .accessibilityIdentifier("ben-chy-fixture-replace")
                         Button("Clear fixture credential") {
-                            Task { await clearFixtureCredential() }
+                            let operation = credentialCoordinator.begin()
+                            fixtureUsername = "Signing out"
+                            Task { await clearFixtureCredential(operation: operation) }
                         }
                         .accessibilityIdentifier("ben-chy-fixture-clear")
                         if ProcessInfo.processInfo.arguments.contains("-fixture-delay-login") {
@@ -208,11 +210,10 @@ private struct BenchySyntheticHost: View {
     }
 
     @MainActor
-    private func clearFixtureCredential() async {
-        let operation = credentialCoordinator.begin()
-        fixtureUsername = "Signed out"
+    private func clearFixtureCredential(operation: Int) async {
         do {
             try await credentialCoordinator.clear(for: operation)
+            if credentialCoordinator.isCurrent(operation) { fixtureUsername = "Signed out" }
         } catch {
             if credentialCoordinator.isCurrent(operation) { fixtureUsername = "Fixture unavailable" }
         }
