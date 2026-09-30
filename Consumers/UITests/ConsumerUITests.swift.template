@@ -30,6 +30,18 @@ private func assertCount(_ app: XCUIApplication, identifier: String, send: Int, 
 #if CATALOG
 final class CatalogUITests: XCTestCase {
     @MainActor
+    func testCatalogKeychainRoundTrip() {
+        let app = XCUIApplication()
+        app.launch()
+        assertPin(app)
+        app.buttons["catalog-keychain-check"].tap()
+        let result = element(app, "catalog-keychain-result")
+        let passed = NSPredicate(format: "label == %@", "Keychain store, load, clear passed")
+        expectation(for: passed, evaluatedWith: result)
+        waitForExpectations(timeout: 10)
+    }
+
+    @MainActor
     func testTwoInstancesAndControlledActions() {
         let app = XCUIApplication()
         app.launch()
@@ -130,6 +142,18 @@ final class CatalogUITests: XCTestCase {
 
 #if BENCHY
 final class BenchyUITests: XCTestCase {
+    @MainActor
+    func testCoordinatorSessionLifecycle() {
+        let app = XCUIApplication()
+        app.launch()
+        assertPin(app)
+        app.buttons["ben-chy-session-run"].tap()
+        let result = element(app, "ben-chy-session-outcome")
+        let passed = NSPredicate(format: "label CONTAINS %@", "one refresh; two replays; revocation signed out")
+        expectation(for: passed, evaluatedWith: result)
+        waitForExpectations(timeout: 15)
+    }
+
     @MainActor
     func testSendStopFailureRetryAndPin() {
         let app = XCUIApplication()

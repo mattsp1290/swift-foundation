@@ -15,7 +15,8 @@ struct BenchySyntheticApp: App {
         if let action = ProcessInfo.processInfo.environment["FOUNDATION_FIXTURE_SMOKE_ACTION"] {
             Task { @MainActor in
                 do {
-                    let result = try await FixtureSmoke.run(action: action)
+                    let result = try await (action == "session"
+                        ? SessionLifecycleFixture.run() : FixtureSmoke.run(action: action))
                     print("Fixture smoke result: \(result)")
                     exit(0)
                 } catch {
@@ -46,6 +47,7 @@ private struct BenchySyntheticHost: View {
     @State private var stopCallbacks = 0
     @State private var retryCallbacks = 0
     @State private var fixtureUsername = "Signed out"
+    @State private var sessionLifecycleOutcome = "Session lifecycle unchecked"
     @State private var delayedLoginOutcome = "Waiting"
     @State private var credentialCoordinator = FixtureCredentialCoordinator()
 
@@ -83,6 +85,13 @@ private struct BenchySyntheticHost: View {
                     }
                     Button("Fail response") { run = .failed }
                     Button(connected ? "Go offline" : "Reconnect") { connected.toggle() }
+                    Button("Run session lifecycle") {
+                        Task {
+                            do { sessionLifecycleOutcome = try await SessionLifecycleFixture.run() }
+                            catch { sessionLifecycleOutcome = "Session lifecycle failed" }
+                        }
+                    }
+                    .accessibilityIdentifier("ben-chy-session-run")
                     Menu("Fixture credentials") {
                         Button("Replace fixture credential") {
                             Task { await replaceFixtureCredential() }
@@ -109,6 +118,9 @@ private struct BenchySyntheticHost: View {
                     }
                 }
                 .buttonStyle(.bordered)
+                Text(sessionLifecycleOutcome)
+                    .font(.caption)
+                    .accessibilityIdentifier("ben-chy-session-outcome")
                 Text("Callbacks: send \(sendCallbacks), stop \(stopCallbacks), retry \(retryCallbacks)")
                     .font(.caption)
                     .accessibilityIdentifier("ben-chy-callback-counts")

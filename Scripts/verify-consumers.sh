@@ -68,7 +68,11 @@ for scheme in FoundationCatalog BenchySynthetic; do
   mac_test_log="$output_dir/$scheme-macos-ui-test.log"
   ios_test_log="$output_dir/$scheme-ios-ui-test.log"
   if [[ "$scheme" == FoundationCatalog ]]; then xcrun simctl ui "$simulator_udid" appearance light; else xcrun simctl ui "$simulator_udid" appearance dark; fi
-  xcodebuild -project FoundationConsumers.xcodeproj -scheme "${scheme}_macOS" -configuration Debug -destination 'platform=macOS' -derivedDataPath "$test_derived_data" -parallel-testing-enabled NO -resultBundlePath "$output_dir/$scheme-macos-ui.xcresult" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES test > "$mac_test_log" 2>&1 || { tail -100 "$mac_test_log"; exit 1; }
+  if [[ "${FOUNDATION_SKIP_BENCHY_MACOS_UI_TESTS:-0}" != 1 || "$scheme" != BenchySynthetic ]]; then
+    xcodebuild -project FoundationConsumers.xcodeproj -scheme "${scheme}_macOS" -configuration Debug -destination 'platform=macOS' -derivedDataPath "$test_derived_data" -parallel-testing-enabled NO -resultBundlePath "$output_dir/$scheme-macos-ui.xcresult" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES test > "$mac_test_log" 2>&1 || { tail -100 "$mac_test_log"; exit 1; }
+  else
+    echo "Skipping BenchySynthetic macOS XCUITest runner; native host smoke runs in verify-session-consumers.sh"
+  fi
   xcodebuild -project FoundationConsumers.xcodeproj -scheme "${scheme}_iOS" -configuration Debug -destination "platform=iOS Simulator,id=$simulator_udid" -derivedDataPath "$test_derived_data" -parallel-testing-enabled NO -resultBundlePath "$output_dir/$scheme-ios-ui.xcresult" test > "$ios_test_log" 2>&1 || { tail -100 "$ios_test_log"; exit 1; }
 done
 xcrun simctl ui "$simulator_udid" content_size accessibility-medium

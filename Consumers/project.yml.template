@@ -49,6 +49,8 @@ targets:
         product: AgentPresentation
       - package: swift-foundation
         product: AgentViews
+      - package: swift-foundation
+        product: SessionCredentials
   BenchySynthetic:
     type: application
     platform: [iOS, macOS]

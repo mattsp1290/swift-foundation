@@ -1,10 +1,27 @@
 import AgentPresentation
 import AgentViews
+import SessionCredentials
 import SwiftUI
+#if os(macOS)
+import Darwin
+#endif
 
 @main
 struct CatalogApp: App {
-    init() { logFoundationRevision() }
+    @StateObject private var sessionFixture = CatalogSessionFixture()
+    init() {
+        logFoundationRevision()
+        #if os(macOS)
+        if ProcessInfo.processInfo.environment["FOUNDATION_CATALOG_KEYCHAIN_SMOKE"] == "1" {
+            Task { @MainActor in
+                let fixture = CatalogSessionFixture()
+                await fixture.roundTrip()
+                print("Catalog Keychain smoke result: \(fixture.result)")
+                exit(fixture.result == "Keychain store, load, clear passed" ? 0 : 1)
+            }
+        }
+        #endif
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -15,6 +32,9 @@ struct CatalogApp: App {
                         Text("Two independent conversations with host controlled state.")
                         CatalogConversation(title: "Connected", initialRole: .assistant)
                         CatalogConversation(title: "Second instance", initialRole: .user)
+                        Button("Check catalog Keychain") { Task { await sessionFixture.roundTrip() } }
+                            .accessibilityIdentifier("catalog-keychain-check")
+                        Text(sessionFixture.result).accessibilityIdentifier("catalog-keychain-result")
                         FoundationRevision()
                     }
                     .padding()
