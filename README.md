@@ -18,9 +18,11 @@ A Swift package for a controlled, plain text agent conversation surface. The hos
 
 `AgentViews` imports SwiftUI and `AgentPresentation`:
 
-- `AgentTranscriptView(messages:)` renders user and assistant text in host order. Text is selectable.
-- `AgentComposerView(draft:isEnabled:onSend:)` binds to the host's draft. It enables Send only for nonblank text when `isEnabled` is true. Sending trims outer whitespace, clears the draft, then invokes `onSend` once with the consumed text.
-- `AgentConversationView(messages:draft:isSendEnabled:onSend:)` combines the transcript and composer.
+- `AgentTranscriptView(messages:)` renders user and assistant text in host order. Text is selectable and exposes role plus text to VoiceOver.
+- `AgentComposerView(draft:isEnabled:onSend:)` binds to the host's multiline draft. It enables Send only for nonblank text when `isEnabled` is true. Sending trims outer whitespace, clears the draft, then invokes `onSend` once with the consumed text. Command-Return also sends. Return alone remains available for multiline entry.
+- `AgentConversationStatus(connection:run:transcript:error:omittedMessageCount:)` is a host supplied display value. Connection is connected, connecting, or disconnected; run is idle, pending, or failed; transcript is live, stale, or unavailable. The host must sanitize `error` before passing it. The value gates send, stop, and retry.
+- `AgentStatusView(status:onStop:onRetry:)` displays connection, pending, stale, unavailable, omission, and error notices. It exposes guarded Stop and Retry actions with VoiceOver and keyboard support (Command-period stops).
+- `AgentConversationView(messages:draft:isSendEnabled:status:onStop:onRetry:onSend:)` combines status, transcript, and composer. Existing send-only call sites keep working through defaults.
 
 The SDK's public decoding and reduction stay upstream of this boundary. The projection never decodes SSE, fetches media, or retains raw events, tool arguments, encrypted values, metadata, reasoning, system or developer messages. Multimodal user content and unrecognized message types are omitted explicitly. A host must byte-cap raw snapshots before SDK decoding, decide when an observation is valid, and pass complete replacements to the projection; this package does not own transport or app policy.
 
@@ -53,3 +55,25 @@ struct SyntheticAgentHost: View {
 ```
 
 Run `swift test` for model and submission checks. Build the package with `swift build` on macOS, and use `xcodebuild -scheme AgentViews -destination 'generic/platform=iOS Simulator' build` for the iOS Simulator.
+
+## URL-only native consumer verification
+
+`Consumers/` contains two independent native SwiftUI applications: `FoundationCatalog` presents two isolated conversations and all status notices; `BenchySynthetic` behaves like a small synthetic request host. Neither app starts network traffic. Both display per-instance send/stop/retry callback counts, the exact `swift-foundation` Git SHA / SwiftPM revision pin, and log that pin when displayed. These are host examples, not Agentcraft or Benchy app migrations.
+
+After a candidate commit is published to the public GitHub URL, run on a Mac with Xcode 26.2, XcodeGen 2.46 (`brew install xcodegen`), and a booted iPhone 16 Pro iOS 18.2 Simulator:
+
+```sh
+Scripts/verify-consumers.sh <published-40-character-swift-foundation-commit-SHA>
+```
+
+The script generates an isolated Xcode project under `/tmp`, with one SwiftPM dependency: `https://github.com/mattsp1290/swift-foundation.git` at the supplied immutable revision. There are no sibling checkout paths or package overrides. It builds both apps for macOS and iPhone Simulator, launches each Mac executable, installs and launches each simulator app, and leaves the generated project and per-target logs in the printed output directory. Set `FOUNDATION_CONSUMER_OUTPUT` to retain it at a chosen path. The package itself pins AG-UI SDK revision `9412aab2549e06e165ada85fe6346b9b6e5a0f2b`. The generated app schemes are `FoundationCatalog_macOS`, `FoundationCatalog_iOS`, `BenchySynthetic_macOS`, and `BenchySynthetic_iOS`.
+
+The transcript uses `agent-transcript` and `agent-message-<id>` accessibility identifiers; the draft, send, Stop, Retry, and status use `agent-composer-draft`, `agent-composer-send`, `agent-stop`, `agent-retry`, and `agent-status`. The catalog and Benchy callback count labels have `catalog-callback-counts-<title>` and `ben-chy-callback-counts` identifiers. Use these with Xcode's Accessibility Inspector or UI automation. The catalog provides stale, unavailable, live, disconnect, and failed controls for manual acceptance; the Benchy host provides complete, fail, and connection controls. Verify a multiline draft, one Send callback, disabled Send while pending or offline, one Stop/Retry callback, copy/select, VoiceOver labels, keyboard navigation, light/dark, narrow iPhone layout, and 200% Dynamic Type in the running apps.
+
+## Provenance and maintenance
+
+Maintainer: Matt Spurlin. License: MIT, see `LICENSE`. This package's public source is `https://github.com/mattsp1290/swift-foundation`; the only external runtime dependency is the public pinned AG-UI Swift SDK. The consumer examples are synthetic and carry no credentials, session identifiers, or private routes.
+
+## Verification record
+
+On 2026-09-29, `swift test` passed on macOS with Xcode 26.2 / Swift 6.2.3. A temporary XcodeGen project using a local package path for pre-publication compile verification built the catalog and synthetic Benchy host on macOS and iOS Simulator. Run the URL-only script above with the published candidate SHA for definitive independent-consumer verification; the script cannot pin an unpublished source revision.

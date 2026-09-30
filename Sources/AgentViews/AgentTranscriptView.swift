@@ -25,6 +25,7 @@ public struct AgentTranscriptView: View {
                                 in: RoundedRectangle(cornerRadius: 12)
                             )
                             .accessibilityIdentifier("agent-message-\(message.id)")
+                            .accessibilityLabel("\(message.role == .user ? "You" : "Assistant"): \(message.text)")
                         if message.role == .assistant { Spacer(minLength: 32) }
                     }
                 }

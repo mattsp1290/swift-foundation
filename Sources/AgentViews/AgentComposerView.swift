@@ -3,6 +3,7 @@ import SwiftUI
 /// A host-controlled plain text composer. A valid submission clears the binding
 /// before calling `onSend`, so a second action cannot resend the same draft.
 public struct AgentComposerView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Binding private var draft: String
     private let isEnabled: Bool
     private let onSend: @MainActor (String) -> Void
@@ -18,18 +19,32 @@ public struct AgentComposerView: View {
     }
 
     public var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            TextField("Message", text: $draft, axis: .vertical)
-                .lineLimit(1...5)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit(send)
-                .accessibilityIdentifier("agent-composer-draft")
-
-            Button("Send", action: send)
-                .disabled(!AgentComposerSubmission.canSend(draft, isEnabled: isEnabled))
-                .accessibilityIdentifier("agent-composer-send")
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) { editor; sendButton }
+            } else {
+                HStack(alignment: .bottom, spacing: 8) { editor; sendButton }
+            }
         }
         .padding()
+    }
+
+    private var editor: some View {
+        TextField("Message", text: $draft, axis: .vertical)
+            .lineLimit(2...6)
+            .textFieldStyle(.roundedBorder)
+            .disabled(!isEnabled)
+            .accessibilityLabel("Message draft")
+            .accessibilityHint("Enter multiple lines, then choose Send")
+            .accessibilityIdentifier("agent-composer-draft")
+    }
+
+    private var sendButton: some View {
+        Button("Send", action: send)
+            .keyboardShortcut(.return, modifiers: .command)
+            .disabled(!AgentComposerSubmission.canSend(draft, isEnabled: isEnabled))
+            .accessibilityLabel("Send message")
+            .accessibilityIdentifier("agent-composer-send")
     }
 
     private func send() {

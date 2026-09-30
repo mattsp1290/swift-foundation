@@ -1,0 +1,41 @@
+name: FoundationConsumers
+options:
+  bundleIdPrefix: homes.birb.foundationconsumers
+  deploymentTarget:
+    iOS: '16.0'
+    macOS: '13.0'
+packages:
+  swift-foundation:
+    url: https://github.com/mattsp1290/swift-foundation.git
+    revision: __FOUNDATION_PIN__
+targets:
+  FoundationCatalog:
+    type: application
+    platform: [iOS, macOS]
+    sources: [Catalog, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: homes.birb.foundationconsumers.catalog
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: '6.0'
+        SWIFT_STRICT_CONCURRENCY: complete
+    dependencies:
+      - package: swift-foundation
+        product: AgentPresentation
+      - package: swift-foundation
+        product: AgentViews
+  BenchySynthetic:
+    type: application
+    platform: [iOS, macOS]
+    sources: [BenchySynthetic, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: homes.birb.foundationconsumers.benchysynthetic
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: '6.0'
+        SWIFT_STRICT_CONCURRENCY: complete
+    dependencies:
+      - package: swift-foundation
+        product: AgentPresentation
+      - package: swift-foundation
+        product: AgentViews
