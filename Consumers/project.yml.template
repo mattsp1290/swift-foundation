@@ -1,0 +1,110 @@
+name: FoundationConsumers
+options:
+  bundleIdPrefix: homes.birb.foundationconsumers
+  deploymentTarget:
+    iOS: '16.0'
+    macOS: '13.0'
+packages:
+  swift-foundation:
+    url: https://github.com/mattsp1290/swift-foundation.git
+    revision: __FOUNDATION_PIN__
+schemes:
+  FoundationCatalog_macOS:
+    build:
+      targets:
+        FoundationCatalog_macOS: all
+    test:
+      targets: [CatalogUITests_macOS]
+  FoundationCatalog_iOS:
+    build:
+      targets:
+        FoundationCatalog_iOS: all
+    test:
+      targets: [CatalogUITests_iOS]
+  BenchySynthetic_macOS:
+    build:
+      targets:
+        BenchySynthetic_macOS: all
+    test:
+      targets: [BenchyUITests_macOS]
+  BenchySynthetic_iOS:
+    build:
+      targets:
+        BenchySynthetic_iOS: all
+    test:
+      targets: [BenchyUITests_iOS]
+targets:
+  FoundationCatalog:
+    type: application
+    platform: [iOS, macOS]
+    sources: [Catalog, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: homes.birb.foundationconsumers.catalog
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: '6.0'
+        SWIFT_STRICT_CONCURRENCY: complete
+    dependencies:
+      - package: swift-foundation
+        product: AgentPresentation
+      - package: swift-foundation
+        product: AgentViews
+  BenchySynthetic:
+    type: application
+    platform: [iOS, macOS]
+    sources: [BenchySynthetic, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: homes.birb.foundationconsumers.benchysynthetic
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: '6.0'
+        SWIFT_STRICT_CONCURRENCY: complete
+    dependencies:
+      - package: swift-foundation
+        product: AgentPresentation
+      - package: swift-foundation
+        product: AgentViews
+  CatalogUITests_iOS:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: '6.0'
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: CATALOG
+    dependencies:
+      - target: FoundationCatalog_iOS
+  CatalogUITests_macOS:
+    type: bundle.ui-testing
+    platform: macOS
+    sources: [UITests]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: '6.0'
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: CATALOG
+    dependencies:
+      - target: FoundationCatalog_macOS
+  BenchyUITests_iOS:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: '6.0'
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: BENCHY
+    dependencies:
+      - target: BenchySynthetic_iOS
+  BenchyUITests_macOS:
+    type: bundle.ui-testing
+    platform: macOS
+    sources: [UITests]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: '6.0'
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: BENCHY
+    dependencies:
+      - target: BenchySynthetic_macOS

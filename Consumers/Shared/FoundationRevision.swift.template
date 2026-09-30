@@ -1,0 +1,16 @@
+import Foundation
+import SwiftUI
+
+func logFoundationRevision() {
+    NSLog("swift-foundation Git SHA / SwiftPM pin: __FOUNDATION_PIN__")
+}
+
+struct FoundationRevision: View {
+    var body: some View {
+        Text("swift-foundation Git SHA / SwiftPM pin: __FOUNDATION_PIN__")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .textSelection(.enabled)
+            .accessibilityLabel("swift-foundation Git revision and dependency pin __FOUNDATION_PIN__")
+    }
+}
