@@ -85,14 +85,14 @@ private struct BenchySyntheticHost: View {
                     }
                     Button("Fail response") { run = .failed }
                     Button(connected ? "Go offline" : "Reconnect") { connected.toggle() }
-                    Button("Run session lifecycle") {
-                        Task {
-                            do { sessionLifecycleOutcome = try await SessionLifecycleFixture.run() }
-                            catch { sessionLifecycleOutcome = "Session lifecycle failed" }
-                        }
-                    }
-                    .accessibilityIdentifier("ben-chy-session-run")
                     Menu("Fixture credentials") {
+                        Button("Run session lifecycle") {
+                            Task {
+                                do { sessionLifecycleOutcome = try await SessionLifecycleFixture.run() }
+                                catch { sessionLifecycleOutcome = "Session lifecycle failed" }
+                            }
+                        }
+                        .accessibilityIdentifier("ben-chy-session-run")
                         Button("Replace fixture credential") {
                             Task { await replaceFixtureCredential() }
                         }
@@ -118,9 +118,11 @@ private struct BenchySyntheticHost: View {
                     }
                 }
                 .buttonStyle(.bordered)
-                Text(sessionLifecycleOutcome)
-                    .font(.caption)
-                    .accessibilityIdentifier("ben-chy-session-outcome")
+                if sessionLifecycleOutcome != "Session lifecycle unchecked" {
+                    Text(sessionLifecycleOutcome)
+                        .font(.caption)
+                        .accessibilityIdentifier("ben-chy-session-outcome")
+                }
                 Text("Callbacks: send \(sendCallbacks), stop \(stopCallbacks), retry \(retryCallbacks)")
                     .font(.caption)
                     .accessibilityIdentifier("ben-chy-callback-counts")

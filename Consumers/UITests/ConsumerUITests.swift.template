@@ -147,6 +147,7 @@ final class BenchyUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         assertPin(app)
+        app.buttons["Fixture credentials"].tap()
         app.buttons["ben-chy-session-run"].tap()
         let result = element(app, "ben-chy-session-outcome")
         let passed = NSPredicate(format: "label CONTAINS %@", "one refresh; two replays; revocation signed out")
