@@ -204,6 +204,80 @@ final class BenchyUITests: XCTestCase {
         expectation(for: signedOut, evaluatedWith: stillSignedOut)
         waitForExpectations(timeout: 10)
     }
+
+    @MainActor
+    func testClearWinsOverDelayedLoginResponse() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-fixture-delay-login"]
+        app.launch()
+        app.buttons["Fixture credentials"].tap()
+        app.buttons["ben-chy-fixture-clear"].tap()
+        let username = element(app, "ben-chy-protected-username")
+        let signedOut = NSPredicate(format: "label CONTAINS %@", "Signed out")
+        expectation(for: signedOut, evaluatedWith: username)
+        waitForExpectations(timeout: 10)
+
+        app.buttons["ben-chy-fixture-login"].tap()
+        let pending = NSPredicate(format: "label CONTAINS %@", "Fixture login pending")
+        expectation(for: pending, evaluatedWith: username)
+        waitForExpectations(timeout: 10)
+        let parkedLogin = NSPredicate(format: "label CONTAINS %@", "Delayed login parked")
+        expectation(for: parkedLogin, evaluatedWith: element(app, "ben-chy-delayed-login-outcome"))
+        waitForExpectations(timeout: 10)
+        app.buttons["Fixture credentials"].tap()
+        app.buttons["ben-chy-fixture-clear"].tap()
+        expectation(for: signedOut, evaluatedWith: username)
+        waitForExpectations(timeout: 10)
+        app.buttons["Fixture credentials"].tap()
+        app.buttons["ben-chy-fixture-release-login"].tap()
+        let discarded = NSPredicate(format: "label CONTAINS %@", "Delayed login discarded")
+        expectation(for: discarded, evaluatedWith: element(app, "ben-chy-delayed-login-outcome"))
+        waitForExpectations(timeout: 10)
+        expectation(for: signedOut, evaluatedWith: username)
+        waitForExpectations(timeout: 10)
+        app.terminate()
+        app.launch()
+        let recovered = element(app, "ben-chy-protected-username")
+        expectation(for: signedOut, evaluatedWith: recovered)
+        waitForExpectations(timeout: 10)
+    }
+
+    @MainActor
+    func testClearWinsOverDelayedRestoreResponse() {
+        let app = XCUIApplication()
+        app.launch()
+        app.buttons["ben-chy-fixture-login"].tap()
+        let username = element(app, "ben-chy-protected-username")
+        let fixture = NSPredicate(format: "label CONTAINS %@", "fixture-alice")
+        expectation(for: fixture, evaluatedWith: username)
+        waitForExpectations(timeout: 10)
+        app.terminate()
+
+        app.launchArguments += ["-fixture-delay-profile"]
+        app.launch()
+        let pendingUsername = element(app, "ben-chy-protected-username")
+        let pending = NSPredicate(format: "label CONTAINS %@", "Fixture restore pending")
+        expectation(for: pending, evaluatedWith: pendingUsername)
+        waitForExpectations(timeout: 10)
+        let parkedProfile = NSPredicate(format: "label CONTAINS %@", "Delayed profile parked")
+        expectation(for: parkedProfile, evaluatedWith: element(app, "ben-chy-delayed-login-outcome"))
+        waitForExpectations(timeout: 10)
+        app.buttons["Fixture credentials"].tap()
+        app.buttons["ben-chy-fixture-clear"].tap()
+        let signedOut = NSPredicate(format: "label CONTAINS %@", "Signed out")
+        expectation(for: signedOut, evaluatedWith: pendingUsername)
+        waitForExpectations(timeout: 10)
+        app.buttons["Fixture credentials"].tap()
+        app.buttons["ben-chy-fixture-release-profile"].tap()
+        let discarded = NSPredicate(format: "label CONTAINS %@", "Delayed restore discarded")
+        expectation(for: discarded, evaluatedWith: element(app, "ben-chy-delayed-login-outcome"))
+        waitForExpectations(timeout: 10)
+        app.terminate()
+        app.launch()
+        let recovered = element(app, "ben-chy-protected-username")
+        expectation(for: signedOut, evaluatedWith: recovered)
+        waitForExpectations(timeout: 10)
+    }
     #endif
 
     #if os(macOS)
