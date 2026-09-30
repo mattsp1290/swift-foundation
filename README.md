@@ -62,7 +62,7 @@ Run `swift test` for model and submission checks. Build the package with `swift 
 
 ## URL-only native consumer verification
 
-`Consumers/` contains two independent native SwiftUI applications: `FoundationCatalog` presents two isolated conversations and all status notices; `BenchySynthetic` behaves like a small synthetic request host. BenchySynthetic uses an in-process URLProtocol fixture and a host-supplied access token to display the protected `fixture-alice` username; it makes no external network request. Both display per-instance send/stop/retry callback counts, the exact `swift-foundation` Git SHA / SwiftPM revision pin, and log that pin when displayed. These are host examples, not Agentcraft or Benchy app migrations.
+`Consumers/` contains two independent native SwiftUI applications: `FoundationCatalog` presents two isolated conversations and all status notices; `BenchySynthetic` behaves like a small synthetic request host. Tap **Log in to fixture** to receive an opaque refresh credential from its in-process URLProtocol fixture. The host stores and loads that credential through `InMemorySessionCredentialStore`, exchanges it for an access token, and passes the access token to `AuthenticatedHTTPClient` to display the protected `fixture-alice` username. It makes no external network request. Both display per-instance send/stop/retry callback counts, the exact `swift-foundation` Git SHA / SwiftPM revision pin, and log that pin when displayed. These are host examples, not Agentcraft or Benchy app migrations.
 
 After a candidate commit is published to the public GitHub URL, run on a Mac with Xcode 26.2, XcodeGen 2.46 (`brew install xcodegen`), and a booted iPhone 16 Pro iOS 18.2 Simulator:
 

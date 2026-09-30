@@ -66,6 +66,8 @@ targets:
         product: AgentViews
       - package: swift-foundation
         product: AuthenticatedHTTP
+      - package: swift-foundation
+        product: SessionCredentials
   CatalogUITests_iOS:
     type: bundle.ui-testing
     platform: iOS

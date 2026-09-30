@@ -138,6 +138,10 @@ final class BenchyUITests: XCTestCase {
         XCTAssertTrue(element(app, "agent-status").waitForExistence(timeout: 10))
         let protectedUsername = element(app, "ben-chy-protected-username")
         XCTAssertTrue(protectedUsername.waitForExistence(timeout: 10))
+        XCTAssertTrue(protectedUsername.label.contains("Signed out"))
+        let login = app.buttons["ben-chy-fixture-login"]
+        XCTAssertTrue(login.waitForExistence(timeout: 10))
+        login.tap()
         let fixture = NSPredicate(format: "label CONTAINS %@", "fixture-alice")
         expectation(for: fixture, evaluatedWith: protectedUsername)
         waitForExpectations(timeout: 10)

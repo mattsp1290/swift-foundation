@@ -17,7 +17,7 @@ public struct APIEndpoint: Sendable, Equatable {
               components.user == nil, components.password == nil,
               components.query == nil, components.fragment == nil,
               baseURL.absoluteString.hasSuffix("/"),
-              !baseURL.path.contains("/../"), !baseURL.path.contains("/./") else {
+              Self.hasSafePathSegments(components.percentEncodedPath) else {
             throw ValidationError.invalidBaseURL
         }
         guard scheme == "https" || (scheme == "http" && Self.isLoopback(host)) else {
@@ -33,13 +33,20 @@ public struct APIEndpoint: Sendable, Equatable {
               let components = URLComponents(string: path),
               components.scheme == nil, components.host == nil,
               components.query == nil, components.fragment == nil,
-              !path.split(separator: "/", omittingEmptySubsequences: false).contains(where: {
-                  $0 == "." || $0 == ".." || $0.lowercased() == "%2e" || $0.lowercased() == "%2e%2e"
-              }),
-              let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
+              Self.hasSafePathSegments(components.percentEncodedPath),
+              let url = URL(string: path, relativeTo: baseURL)?.absoluteURL,
+              url.path.hasPrefix(baseURL.path) else {
             throw ValidationError.invalidPath
         }
         return url
+    }
+
+    private static func hasSafePathSegments(_ encodedPath: String) -> Bool {
+        encodedPath.split(separator: "/", omittingEmptySubsequences: false).allSatisfy { segment in
+            guard let decoded = String(segment).removingPercentEncoding else { return false }
+            return decoded != "." && decoded != ".."
+                && !decoded.contains("/") && !decoded.contains("\\")
+        }
     }
 
     private static func isLoopback(_ host: String) -> Bool {

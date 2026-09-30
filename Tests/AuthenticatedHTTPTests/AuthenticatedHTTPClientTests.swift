@@ -6,17 +6,24 @@ final class AuthenticatedHTTPClientTests: XCTestCase {
     func testEndpointValidation() throws {
         let good = try APIEndpoint(baseURL: URL(string: "https://api.example.test/v1/")!)
         XCTAssertEqual(try good.url(for: "profile"), URL(string: "https://api.example.test/v1/profile"))
+        let nested = try APIEndpoint(baseURL: URL(string: "https://api.example.test/v1/nested/")!)
+        XCTAssertEqual(try nested.url(for: "account/profile"), URL(string: "https://api.example.test/v1/nested/account/profile"))
         XCTAssertNoThrow(try APIEndpoint(baseURL: URL(string: "http://127.0.0.1:8080/")!))
         XCTAssertNoThrow(try APIEndpoint(baseURL: URL(string: "http://[::1]:8080/")!))
         for value in [
             "https://api.example.test/v1", "https://user:secret@api.example.test/",
             "https://api.example.test/?a=1", "https://api.example.test/#part",
+            "https://api.example.test/v1/%2e./", "https://api.example.test/v1/x%2fy/",
             "http://api.example.test/", "http://127.0.0.2.example.test/",
         ] {
             XCTAssertThrowsError(try APIEndpoint(baseURL: URL(string: value)!))
         }
-        for path in ["/profile", "../profile", "x/../profile", "profile?token=x", "https://other.test/"] {
-            XCTAssertThrowsError(try good.url(for: path))
+        for path in [
+            "/profile", "../profile", "x/../profile", "%2e./secret", ".%2e/secret",
+            "x/%2E%2e/secret", "x%2f..%2fsecret", "x%5csecret", "profile?token=x",
+            "https://other.test/",
+        ] {
+            XCTAssertThrowsError(try nested.url(for: path), "Accepted unsafe nested path: \(path)")
         }
     }
 
