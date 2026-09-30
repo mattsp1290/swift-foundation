@@ -13,8 +13,8 @@ A Swift package for a controlled, plain text agent conversation surface. The hos
 `AgentPresentation` has no SwiftUI dependency. It imports Foundation and the pinned SDK's `AGUICore` product for typed, already decoded messages:
 
 - `AgentTranscriptMessage(id:role:text:)` is an immutable, `Sendable`, `Hashable` display value. `id` is a host supplied stable string; `role` is `.user` or `.assistant`; `text` is plain text.
-- `AgentTranscriptProjection(messages:)` copies only `UserMessage.content` and `AssistantMessage.content` into display values. It accepts the decoded message array from a host observation, including `MessagesSnapshotEvent.messages` or an accumulated `AgentState.messages` value. Each replacement is deterministic, with at most 100 messages, 1 MiB of displayed UTF-8 text, and 256 UTF-8 bytes per identifier. `omissions` reports aggregate counts for unsupported content, invalid or duplicate identifiers, and limits; it carries no omitted content or identifiers.
-- `AgentTranscriptDelivery` is a `@MainActor` holder for the last accepted projection and `.live`, `.stale`, or `.unavailable` status. Call `observationFailed()` when the host cannot observe a new state; it retains the last projection.
+- `AgentTranscriptProjection(messages:)` throws if an observation exceeds 1,000 source messages or a 2 MiB text-inspection budget. Within that budget it copies only `UserMessage.content` and `AssistantMessage.content` into display values. It accepts the decoded message array from a host observation, including `MessagesSnapshotEvent.messages` or an accumulated `AgentState.messages` value. Each replacement is deterministic, with at most 100 displayed messages, 1 MiB of displayed UTF-8 text, and 256 UTF-8 bytes per identifier. `omissions` reports aggregate counts for unsupported content, invalid or duplicate identifiers, and display limits; it carries no omitted content or identifiers.
+- `AgentTranscriptDelivery` is a `@MainActor` holder for the last accepted projection and `.live`, `.stale`, or `.unavailable` status. `acceptObservedMessages(_:)` projects a decoded observation and marks an over-budget failure stale while retaining the last accepted projection. Call `observationFailed()` for other observation failures.
 
 `AgentViews` imports SwiftUI and `AgentPresentation`:
 
@@ -22,7 +22,7 @@ A Swift package for a controlled, plain text agent conversation surface. The hos
 - `AgentComposerView(draft:isEnabled:onSend:)` binds to the host's draft. It enables Send only for nonblank text when `isEnabled` is true. Sending trims outer whitespace, clears the draft, then invokes `onSend` once with the consumed text.
 - `AgentConversationView(messages:draft:isSendEnabled:onSend:)` combines the transcript and composer.
 
-The SDK's public decoding and reduction stay upstream of this boundary. The projection never decodes SSE, fetches media, or retains raw events, tool arguments, encrypted values, metadata, reasoning, system or developer messages. Multimodal user content and unrecognized message types are omitted explicitly. A host must decide when an observation is valid and pass complete replacements to the projection; this package does not operate transport or app policy.
+The SDK's public decoding and reduction stay upstream of this boundary. The projection never decodes SSE, fetches media, or retains raw events, tool arguments, encrypted values, metadata, reasoning, system or developer messages. Multimodal user content and unrecognized message types are omitted explicitly. A host must byte-cap raw snapshots before SDK decoding, decide when an observation is valid, and pass complete replacements to the projection; this package does not own transport or app policy.
 
 ## Synthetic host
 
