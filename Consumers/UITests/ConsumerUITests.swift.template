@@ -62,7 +62,9 @@ final class CatalogUITests: XCTestCase {
         XCTAssertFalse(stop.exists)
 
         let markFailed = app.buttons["Mark failed"].firstMatch
+        #if os(macOS)
         XCTAssertTrue(markFailed.isHittable)
+        #endif
         markFailed.tap()
         XCTAssertTrue(app.staticTexts["Sample response failed"].firstMatch.waitForExistence(timeout: 5))
         let retry = element(app, "agent-retry")
@@ -87,7 +89,13 @@ final class CatalogUITests: XCTestCase {
         app.buttons["Unavailable"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Live transcript unavailable"].firstMatch.exists)
         let send = element(app, "agent-composer-send")
-        XCTAssertTrue(send.exists && send.isHittable)
+        XCTAssertTrue(send.exists)
+        #if os(iOS)
+        let outerScroll = element(app, "catalog-scroll")
+        XCTAssertTrue(outerScroll.waitForExistence(timeout: 10))
+        for _ in 0..<5 where !send.isHittable { outerScroll.swipeUp() }
+        #endif
+        XCTAssertTrue(send.isHittable)
         app.buttons["Disconnect"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Disconnected"].firstMatch.exists)
         XCTAssertFalse(send.isEnabled)

@@ -19,6 +19,7 @@ struct CatalogApp: App {
                     }
                     .padding()
                 }
+                .accessibilityIdentifier("catalog-scroll")
             }
         }
     }
