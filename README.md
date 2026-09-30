@@ -1,6 +1,6 @@
 # swift-foundation
 
-A Swift package for a controlled, plain text agent conversation surface. The host supplies transcript values and owns the composer draft and send callback. This package does not start a run or make network requests.
+A Swift package for a controlled, plain text agent conversation surface plus small session and HTTP building blocks. The host supplies transcript values and owns the composer draft and send callback. The conversation surface does not start a run or make network requests.
 
 ## Requirements
 
@@ -9,6 +9,10 @@ A Swift package for a controlled, plain text agent conversation surface. The hos
 - The public [ag-ui-swift](https://github.com/mattsp1290/ag-ui-swift) package, pinned in `Package.swift` to revision `9412aab2549e06e165ada85fe6346b9b6e5a0f2b`
 
 ## Public API
+
+`SessionCredentials` is a Foundation-only product. `RefreshCredential` wraps one opaque refresh credential; `SessionCredentialStore` is a `Sendable` async load/store/clear boundary; `InMemorySessionCredentialStore` is an ephemeral actor implementation. This product does not hold access tokens or account metadata.
+
+`AuthenticatedHTTP` is a Foundation-only product. `APIEndpoint(baseURL:)` requires an absolute trailing-slash HTTPS URL, with plain HTTP permitted for loopback hosts only; it rejects userinfo, query, and fragment. `AuthenticatedHTTPClient(endpoint:session:)` accepts a host-supplied bearer access token on each `request(path:method:accessToken:body:)` call and returns the raw data and HTTP response. The host owns token renewal, status handling, and response decoding.
 
 `AgentPresentation` has no SwiftUI dependency. It imports Foundation and the pinned SDK's `AGUICore` product for typed, already decoded messages:
 
@@ -58,7 +62,7 @@ Run `swift test` for model and submission checks. Build the package with `swift 
 
 ## URL-only native consumer verification
 
-`Consumers/` contains two independent native SwiftUI applications: `FoundationCatalog` presents two isolated conversations and all status notices; `BenchySynthetic` behaves like a small synthetic request host. Neither app starts network traffic. Both display per-instance send/stop/retry callback counts, the exact `swift-foundation` Git SHA / SwiftPM revision pin, and log that pin when displayed. These are host examples, not Agentcraft or Benchy app migrations.
+`Consumers/` contains two independent native SwiftUI applications: `FoundationCatalog` presents two isolated conversations and all status notices; `BenchySynthetic` behaves like a small synthetic request host. BenchySynthetic uses an in-process URLProtocol fixture and a host-supplied access token to display the protected `fixture-alice` username; it makes no external network request. Both display per-instance send/stop/retry callback counts, the exact `swift-foundation` Git SHA / SwiftPM revision pin, and log that pin when displayed. These are host examples, not Agentcraft or Benchy app migrations.
 
 After a candidate commit is published to the public GitHub URL, run on a Mac with Xcode 26.2, XcodeGen 2.46 (`brew install xcodegen`), and a booted iPhone 16 Pro iOS 18.2 Simulator:
 

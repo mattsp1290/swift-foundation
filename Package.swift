@@ -7,6 +7,8 @@ let package = Package(
     products: [
         .library(name: "AgentPresentation", targets: ["AgentPresentation"]),
         .library(name: "AgentViews", targets: ["AgentViews"]),
+        .library(name: "SessionCredentials", targets: ["SessionCredentials"]),
+        .library(name: "AuthenticatedHTTP", targets: ["AuthenticatedHTTP"]),
     ],
     dependencies: [
         .package(
@@ -31,6 +33,10 @@ let package = Package(
             dependencies: ["AgentPresentation", .product(name: "AGUICore", package: "ag-ui-swift")]
         ),
         .testTarget(name: "AgentViewsTests", dependencies: ["AgentViews"]),
+        .target(name: "SessionCredentials"),
+        .target(name: "AuthenticatedHTTP"),
+        .testTarget(name: "SessionCredentialsTests", dependencies: ["SessionCredentials"]),
+        .testTarget(name: "AuthenticatedHTTPTests", dependencies: ["AuthenticatedHTTP"]),
     ],
     swiftLanguageModes: [.v6]
 )
