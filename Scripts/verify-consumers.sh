@@ -35,6 +35,24 @@ for scheme in FoundationCatalog BenchySynthetic; do
   mac_log="$output_dir/$scheme-macos-build.log"
   ios_log="$output_dir/$scheme-ios-build.log"
   xcodebuild -project FoundationConsumers.xcodeproj -scheme "${scheme}_macOS" -configuration Debug -destination 'platform=macOS' -derivedDataPath "$derived_data" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build > "$mac_log" 2>&1 || { tail -80 "$mac_log"; exit 1; }
+  if [[ "$scheme" == FoundationCatalog ]]; then
+    python3 - "$output_dir/FoundationConsumers.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved" "$pin" <<'PYTHON'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as resolved_file:
+    pins = json.load(resolved_file)["pins"]
+expected = {
+    "swift-foundation": ("https://github.com/mattsp1290/swift-foundation.git", sys.argv[2]),
+    "ag-ui-swift": ("https://github.com/mattsp1290/ag-ui-swift.git", "9412aab2549e06e165ada85fe6346b9b6e5a0f2b"),
+}
+actual = {pin["identity"]: (pin["location"], pin["state"]["revision"])
+          for pin in pins if pin["kind"] == "remoteSourceControl"}
+if len(pins) != 2 or actual != expected:
+    raise SystemExit(f"Unexpected public SwiftPM resolution: {actual}")
+print(f"Public SwiftPM resolution verified: {actual}")
+PYTHON
+  fi
   xcodebuild -project FoundationConsumers.xcodeproj -scheme "${scheme}_iOS" -configuration Debug -destination "platform=iOS Simulator,id=$simulator_udid" -derivedDataPath "$derived_data" CODE_SIGNING_ALLOWED=NO build > "$ios_log" 2>&1 || { tail -80 "$ios_log"; exit 1; }
 
   mac_app="$derived_data/Build/Products/Debug/$scheme.app"
