@@ -27,7 +27,10 @@ private struct BenchySyntheticHost: View {
     @State private var stopCallbacks = 0
     @State private var retryCallbacks = 0
     @State private var fixtureUsername = "Signed out"
-    @State private var credentialStore = InMemorySessionCredentialStore()
+    private let credentialStore = KeychainSessionCredentialStore(
+        service: "homes.birb.foundationconsumers.benchysynthetic.fixture",
+        account: "refresh"
+    )
 
     var body: some View {
         NavigationStack {
@@ -63,6 +66,16 @@ private struct BenchySyntheticHost: View {
                     }
                     Button("Fail response") { run = .failed }
                     Button(connected ? "Go offline" : "Reconnect") { connected.toggle() }
+                    Menu("Fixture credentials") {
+                        Button("Replace fixture credential") {
+                            Task { await replaceFixtureCredential() }
+                        }
+                        .accessibilityIdentifier("ben-chy-fixture-replace")
+                        Button("Clear fixture credential") {
+                            Task { await clearFixtureCredential() }
+                        }
+                        .accessibilityIdentifier("ben-chy-fixture-clear")
+                    }
                 }
                 .buttonStyle(.bordered)
                 Text("Callbacks: send \(sendCallbacks), stop \(stopCallbacks), retry \(retryCallbacks)")
@@ -85,6 +98,7 @@ private struct BenchySyntheticHost: View {
                 }
             }
         }
+        .task { await restoreFixtureSession() }
     }
 
     @MainActor
@@ -102,22 +116,61 @@ private struct BenchySyntheticHost: View {
             guard (loginResponse as? HTTPURLResponse)?.statusCode == 200 else { throw FixtureError.unauthorized }
             let login = try JSONDecoder().decode(FixtureLogin.self, from: loginData)
             try await credentialStore.store(RefreshCredential(value: login.refreshCredential))
-
-            guard let refreshCredential = try await credentialStore.load() else { throw FixtureError.unauthorized }
-            var tokenRequest = URLRequest(url: try endpoint.url(for: "token"))
-            tokenRequest.httpMethod = "POST"
-            tokenRequest.setValue(refreshCredential.value, forHTTPHeaderField: "X-Fixture-Refresh")
-            let (tokenData, tokenResponse) = try await session.data(for: tokenRequest)
-            guard (tokenResponse as? HTTPURLResponse)?.statusCode == 200 else { throw FixtureError.unauthorized }
-            let accessToken = try JSONDecoder().decode(FixtureAccessToken.self, from: tokenData).value
-
-            let client = AuthenticatedHTTPClient(endpoint: endpoint, session: session)
-            let (profileData, profileResponse) = try await client.request(path: "profile", accessToken: accessToken)
-            guard profileResponse.statusCode == 200 else { throw FixtureError.unauthorized }
-            fixtureUsername = try JSONDecoder().decode(ProtectedProfile.self, from: profileData).username
+            try await showProtectedFixture(endpoint: endpoint, session: session)
         } catch {
             fixtureUsername = "Fixture unavailable"
         }
+    }
+
+    @MainActor
+    private func restoreFixtureSession() async {
+        do {
+            guard try await credentialStore.load() != nil else { return }
+            let endpoint = try APIEndpoint(baseURL: URL(string: "https://fixture.example.test/")!)
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [ProtectedProfileProtocol.self]
+            let session = URLSession(configuration: configuration)
+            defer { session.invalidateAndCancel() }
+            try await showProtectedFixture(endpoint: endpoint, session: session)
+        } catch {
+            fixtureUsername = "Fixture unavailable"
+        }
+    }
+
+    @MainActor
+    private func replaceFixtureCredential() async {
+        do {
+            try await credentialStore.store(RefreshCredential(value: "fixture-refresh-replacement"))
+            await restoreFixtureSession()
+        } catch {
+            fixtureUsername = "Fixture unavailable"
+        }
+    }
+
+    @MainActor
+    private func clearFixtureCredential() async {
+        do {
+            try await credentialStore.clear()
+            fixtureUsername = "Signed out"
+        } catch {
+            fixtureUsername = "Fixture unavailable"
+        }
+    }
+
+    @MainActor
+    private func showProtectedFixture(endpoint: APIEndpoint, session: URLSession) async throws {
+        guard let refreshCredential = try await credentialStore.load() else { throw FixtureError.unauthorized }
+        var tokenRequest = URLRequest(url: try endpoint.url(for: "token"))
+        tokenRequest.httpMethod = "POST"
+        tokenRequest.setValue(refreshCredential.value, forHTTPHeaderField: "X-Fixture-Refresh")
+        let (tokenData, tokenResponse) = try await session.data(for: tokenRequest)
+        guard (tokenResponse as? HTTPURLResponse)?.statusCode == 200 else { throw FixtureError.unauthorized }
+        let accessToken = try JSONDecoder().decode(FixtureAccessToken.self, from: tokenData).value
+
+        let client = AuthenticatedHTTPClient(endpoint: endpoint, session: session)
+        let (profileData, profileResponse) = try await client.request(path: "profile", accessToken: accessToken)
+        guard profileResponse.statusCode == 200 else { throw FixtureError.unauthorized }
+        fixtureUsername = try JSONDecoder().decode(ProtectedProfile.self, from: profileData).username
     }
 }
 
@@ -139,8 +192,12 @@ private final class ProtectedProfileProtocol: URLProtocol {
             body = Data(#"{"refreshCredential":"fixture-refresh-credential"}"#.utf8)
         case ("/token", "POST") where request.value(forHTTPHeaderField: "X-Fixture-Refresh") == "fixture-refresh-credential":
             body = Data(#"{"value":"fixture-access-token"}"#.utf8)
+        case ("/token", "POST") where request.value(forHTTPHeaderField: "X-Fixture-Refresh") == "fixture-refresh-replacement":
+            body = Data(#"{"value":"fixture-replacement-access-token"}"#.utf8)
         case ("/profile", "GET") where request.value(forHTTPHeaderField: "Authorization") == "Bearer fixture-access-token":
             body = Data(#"{"username":"fixture-alice"}"#.utf8)
+        case ("/profile", "GET") where request.value(forHTTPHeaderField: "Authorization") == "Bearer fixture-replacement-access-token":
+            body = Data(#"{"username":"fixture-bob"}"#.utf8)
         default:
             body = Data()
         }

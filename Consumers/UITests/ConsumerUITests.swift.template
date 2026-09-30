@@ -138,7 +138,6 @@ final class BenchyUITests: XCTestCase {
         XCTAssertTrue(element(app, "agent-status").waitForExistence(timeout: 10))
         let protectedUsername = element(app, "ben-chy-protected-username")
         XCTAssertTrue(protectedUsername.waitForExistence(timeout: 10))
-        XCTAssertTrue(protectedUsername.label.contains("Signed out"))
         let login = app.buttons["ben-chy-fixture-login"]
         XCTAssertTrue(login.waitForExistence(timeout: 10))
         login.tap()
@@ -166,6 +165,46 @@ final class BenchyUITests: XCTestCase {
         assertCount(app, identifier: "ben-chy-callback-counts", send: 1, stop: 1, retry: 1)
         XCTAssertFalse(retry.exists)
     }
+
+    #if os(iOS)
+    @MainActor
+    func testKeychainRecoveryReplacementAndClearAcrossRelaunches() {
+        let app = XCUIApplication()
+        app.launch()
+        app.buttons["ben-chy-fixture-login"].tap()
+        let fixture = NSPredicate(format: "label CONTAINS %@", "fixture-alice")
+        let initial = element(app, "ben-chy-protected-username")
+        expectation(for: fixture, evaluatedWith: initial)
+        waitForExpectations(timeout: 10)
+        app.terminate()
+        app.launch()
+        let recovered = element(app, "ben-chy-protected-username")
+        expectation(for: fixture, evaluatedWith: recovered)
+        waitForExpectations(timeout: 10)
+
+        app.buttons["Fixture credentials"].tap()
+        app.buttons["ben-chy-fixture-replace"].tap()
+        let replaced = NSPredicate(format: "label CONTAINS %@", "fixture-bob")
+        expectation(for: replaced, evaluatedWith: recovered)
+        waitForExpectations(timeout: 10)
+        app.terminate()
+        app.launch()
+        let replacementRecovered = element(app, "ben-chy-protected-username")
+        expectation(for: replaced, evaluatedWith: replacementRecovered)
+        waitForExpectations(timeout: 10)
+
+        app.buttons["Fixture credentials"].tap()
+        app.buttons["ben-chy-fixture-clear"].tap()
+        let signedOut = NSPredicate(format: "label CONTAINS %@", "Signed out")
+        expectation(for: signedOut, evaluatedWith: replacementRecovered)
+        waitForExpectations(timeout: 10)
+        app.terminate()
+        app.launch()
+        let stillSignedOut = element(app, "ben-chy-protected-username")
+        expectation(for: signedOut, evaluatedWith: stillSignedOut)
+        waitForExpectations(timeout: 10)
+    }
+    #endif
 
     #if os(macOS)
     @MainActor
