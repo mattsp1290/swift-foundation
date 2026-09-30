@@ -30,6 +30,24 @@ private func assertCount(_ app: XCUIApplication, identifier: String, send: Int, 
 #if CATALOG
 final class CatalogUITests: XCTestCase {
     @MainActor
+    func testCatalogProtectedSessionJourney() {
+        let app = XCUIApplication()
+        app.launch()
+        assertPin(app)
+        let run = app.buttons["catalog-session-run"]
+        XCTAssertTrue(run.waitForExistence(timeout: 10))
+        #if os(iOS)
+        let scroll = element(app, "catalog-scroll")
+        for _ in 0..<5 where !run.isHittable { scroll.swipeUp() }
+        #endif
+        run.tap()
+        let result = element(app, "catalog-session-result")
+        let passed = NSPredicate(format: "label == %@", "Catalog protected login, refresh, replay, revocation passed")
+        expectation(for: passed, evaluatedWith: result)
+        waitForExpectations(timeout: 15)
+    }
+
+    @MainActor
     func testCatalogKeychainRoundTrip() {
         let app = XCUIApplication()
         app.launch()

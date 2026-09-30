@@ -28,6 +28,10 @@ FOUNDATION_CATALOG_KEYCHAIN_SMOKE=1 "$catalog_app/Contents/MacOS/FoundationCatal
   > "$FOUNDATION_CONSUMER_OUTPUT/Catalog-macos-keychain.log" 2>&1
 grep -Fq 'Catalog Keychain smoke result: Keychain store, load, clear passed' \
   "$FOUNDATION_CONSUMER_OUTPUT/Catalog-macos-keychain.log"
+FOUNDATION_CATALOG_SESSION_SMOKE=1 "$catalog_app/Contents/MacOS/FoundationCatalog" \
+  > "$FOUNDATION_CONSUMER_OUTPUT/Catalog-macos-session.log" 2>&1
+grep -Fq 'Catalog session smoke result: Catalog protected login, refresh, replay, revocation passed' \
+  "$FOUNDATION_CONSUMER_OUTPUT/Catalog-macos-session.log"
 "$root_dir/Scripts/verify-macos-keychain-host.sh" "$ben_chy_app" \
   > "$FOUNDATION_CONSUMER_OUTPUT/Benchy-macos-keychain.log"
 FOUNDATION_FIXTURE_SMOKE_ACTION=session "$ben_chy_app/Contents/MacOS/BenchySynthetic" \

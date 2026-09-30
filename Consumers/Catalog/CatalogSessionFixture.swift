@@ -5,6 +5,7 @@ import SessionCredentials
 @MainActor
 final class CatalogSessionFixture: ObservableObject {
     @Published private(set) var result = "Keychain unchecked"
+    @Published private(set) var requestResult = "Protected session unchecked"
     private let store = KeychainSessionCredentialStore(
         service: "homes.birb.foundationconsumers.catalog.fixture", account: "refresh"
     )
@@ -22,6 +23,14 @@ final class CatalogSessionFixture: ObservableObject {
                 ? "Keychain store, load, clear passed" : "Keychain clear failed"
         } catch {
             result = "Keychain round trip failed"
+        }
+    }
+
+    func runRequestJourney() async {
+        do {
+            requestResult = try await CatalogRequestFixture.run()
+        } catch {
+            requestResult = "Catalog protected session failed"
         }
     }
 }

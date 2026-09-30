@@ -20,6 +20,17 @@ struct CatalogApp: App {
                 exit(fixture.result == "Keychain store, load, clear passed" ? 0 : 1)
             }
         }
+        if ProcessInfo.processInfo.environment["FOUNDATION_CATALOG_SESSION_SMOKE"] == "1" {
+            Task {
+                do {
+                    print("Catalog session smoke result: \(try await CatalogRequestFixture.run())")
+                    exit(0)
+                } catch {
+                    print("Catalog session smoke failed")
+                    exit(1)
+                }
+            }
+        }
         #endif
     }
 
@@ -35,6 +46,12 @@ struct CatalogApp: App {
                         Button("Check catalog Keychain") { Task { await sessionFixture.roundTrip() } }
                             .accessibilityIdentifier("catalog-keychain-check")
                         Text(sessionFixture.result).accessibilityIdentifier("catalog-keychain-result")
+                        Button("Run catalog protected session") {
+                            Task { await sessionFixture.runRequestJourney() }
+                        }
+                        .accessibilityIdentifier("catalog-session-run")
+                        Text(sessionFixture.requestResult)
+                            .accessibilityIdentifier("catalog-session-result")
                         FoundationRevision()
                     }
                     .padding()

@@ -50,6 +50,8 @@ targets:
       - package: swift-foundation
         product: AgentViews
       - package: swift-foundation
+        product: AuthenticatedHTTP
+      - package: swift-foundation
         product: SessionCredentials
   BenchySynthetic:
     type: application

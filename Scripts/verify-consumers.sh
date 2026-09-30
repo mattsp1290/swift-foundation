@@ -94,7 +94,7 @@ PYTHON
     && grep -Fq 'Runtime pin must be visible' "$mac_test_log" \
     && grep -Fq 'No matches found for Descendants matching type Button from input' "$mac_test_log" \
     && grep -Fq "Application, pid:" "$mac_test_log" \
-    && grep -Fq 'Executed 4 tests, with' "$mac_test_log" \
+    && grep -Fq 'Executed 5 tests, with' "$mac_test_log" \
     && ! grep -Eq "Test Case .* passed" "$mac_test_log"; then
     echo "FoundationCatalog macOS XCUITest unverified: app-only accessibility tree; native host smoke runs in verify-session-consumers.sh" >&2
   else
