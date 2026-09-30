@@ -60,6 +60,7 @@ public actor SessionCoordinator {
     private var accessToken: String?
     private var tokenGeneration: UInt64 = 0
     private var refreshTask: Task<Void, Error>?
+    private var credentialWriteTask: Task<Void, Error>?
     private var revocationTask: Task<Void, Error>?
 
     public init(
@@ -94,13 +95,12 @@ public actor SessionCoordinator {
             guard let replayToken = self.accessToken else {
                 throw SessionCoordinatorError.missingAccessToken
             }
-            let replayGeneration = tokenGeneration
             let (replayData, replayResponse) = try await client.request(
                 path: path, method: method, accessToken: replayToken, body: body
             )
             let replayError = SessionServerError(response: replayResponse, data: replayData)
             if Self.isRevocation(replayError) {
-                try await revokeSession(for: replayGeneration)
+                try await revokeSession()
             }
             guard (200..<300).contains(replayResponse.statusCode) else {
                 throw replayError
@@ -108,7 +108,7 @@ public actor SessionCoordinator {
             return (replayData, replayResponse)
         }
         if Self.isRevocation(error) {
-            try await revokeSession(for: generation)
+            try await revokeSession()
         }
         guard (200..<300).contains(response.statusCode) else { throw error }
         return (data, response)
@@ -141,11 +141,16 @@ public actor SessionCoordinator {
                 throw SessionCoordinatorError.missingAccessToken
             }
             // A failed store must leave the existing access token in place.
-            try await credentialStore.store(result.refreshCredential)
-            if tokenGeneration != generation {
-                // A protected response may have revoked the session while the
-                // asynchronous store was replacing the credential.
-                try await credentialStore.clear()
+            let writeTask = Task { try await credentialStore.store(result.refreshCredential) }
+            credentialWriteTask = writeTask
+            do {
+                try await writeTask.value
+                credentialWriteTask = nil
+            } catch {
+                credentialWriteTask = nil
+                throw error
+            }
+            guard tokenGeneration == generation else {
                 throw SessionCoordinatorError.missingAccessToken
             }
             accessToken = result.accessToken
@@ -166,12 +171,18 @@ public actor SessionCoordinator {
             || (error.statusCode == 403 && error.code == "access_forbidden")
     }
 
-    private func revokeSession(for generation: UInt64) async throws {
-        if tokenGeneration != generation { return }
+    /// `generation` is used only for refresh failures. A protected forbidden
+    /// response revokes the current session even if a refresh just completed.
+    private func revokeSession(for generation: UInt64? = nil) async throws {
         if let revocationTask {
             try await revocationTask.value
             return
         }
+        if let generation, tokenGeneration != generation { return }
+        guard accessToken != nil else { return }
+        // Fence protected requests and refresh commits before awaiting storage.
+        accessToken = nil
+        tokenGeneration &+= 1
         let task = Task { try await self.performRevocation() }
         revocationTask = task
         do {
@@ -184,9 +195,17 @@ public actor SessionCoordinator {
     }
 
     private func performRevocation() async throws {
-        try await credentialStore.clear()
-        accessToken = nil
-        tokenGeneration &+= 1
+        // A refresh may already be replacing the opaque credential. Its write
+        // must settle before this final clear, regardless of write outcome.
+        if let credentialWriteTask {
+            _ = try? await credentialWriteTask.value
+        }
+        do {
+            try await credentialStore.clear()
+        } catch {
+            await onSignOut()
+            throw error
+        }
         await onSignOut()
     }
 }

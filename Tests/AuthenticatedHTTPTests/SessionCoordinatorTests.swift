@@ -217,6 +217,119 @@ final class SessionCoordinatorTests: XCTestCase {
         XCTAssertNil(stored)
     }
 
+    func testDelayedProtectedForbiddenRevokesAfterConcurrentRefreshCommits() async throws {
+        let fixture = SessionFixture(forbiddenDelay: 0.2)
+        let store = InMemorySessionCredentialStore()
+        try await store.store(RefreshCredential(value: "refresh-old"))
+        let signOuts = RefreshRecorder()
+        let coordinator = try makeCoordinator(
+            fixture: fixture, store: store,
+            refresh: { _ in
+                SessionRefreshResult(
+                    accessToken: "access-new",
+                    refreshCredential: RefreshCredential(value: "refresh-new")
+                )
+            },
+            onSignOut: { _ = await signOuts.record(RefreshCredential(value: "hook")) }
+        )
+        let forbidden = Task { try await coordinator.request(path: "forbidden") }
+        while fixture.forbiddenRequestCount == 0 { await Task.yield() }
+        _ = try await coordinator.request(path: "profile")
+        let committed = try await store.load()
+        XCTAssertEqual(committed, RefreshCredential(value: "refresh-new"))
+        do {
+            _ = try await forbidden.value
+            XCTFail("Expected forbidden response")
+        } catch let error as SessionServerError {
+            XCTAssertEqual(error, SessionServerError(statusCode: 403, code: "access_forbidden"))
+        }
+        let stored = try await store.load()
+        let signOutCount = await signOuts.count
+        XCTAssertNil(stored)
+        XCTAssertEqual(signOutCount, 1)
+        do {
+            _ = try await coordinator.request(path: "profile")
+            XCTFail("Expected signed-out state")
+        } catch SessionCoordinatorError.missingAccessToken {}
+    }
+
+    func testRevocationWaitsForCredentialWriteAndSignsOutWhenClearFails() async throws {
+        for clearFails in [false, true] {
+            let fixture = SessionFixture()
+            let gate = StoreGate()
+            let store = GatedCredentialStore(gate: gate, clearFails: clearFails)
+            let signOuts = RefreshRecorder()
+            let coordinator = try makeCoordinator(
+                fixture: fixture, store: store,
+                refresh: { _ in
+                    SessionRefreshResult(
+                        accessToken: "access-new",
+                        refreshCredential: RefreshCredential(value: "refresh-new")
+                    )
+                },
+                onSignOut: { _ = await signOuts.record(RefreshCredential(value: "hook")) }
+            )
+            let refreshing = Task { try await coordinator.request(path: "profile") }
+            await gate.waitUntilEntered()
+            let forbidden = Task { try await coordinator.request(path: "forbidden") }
+            while fixture.forbiddenRequestCount == 0 { await Task.yield() }
+            try await Task.sleep(for: .milliseconds(30))
+            let clearCountBeforeRelease = await store.clearCount
+            XCTAssertEqual(clearCountBeforeRelease, 0)
+            await gate.release()
+            _ = try? await refreshing.value
+            do {
+                _ = try await forbidden.value
+                XCTFail("Expected revocation error")
+            } catch CredentialStoreFailure.clearFailed where clearFails {
+                // Clear failure is surfaced after the in-memory session is fenced.
+            } catch let error as SessionServerError where !clearFails {
+                XCTAssertEqual(error, SessionServerError(statusCode: 403, code: "access_forbidden"))
+            }
+            let stored = try await store.load()
+            let clearCount = await store.clearCount
+            let signOutCount = await signOuts.count
+            XCTAssertEqual(clearCount, 1)
+            XCTAssertEqual(signOutCount, 1)
+            XCTAssertEqual(stored, clearFails ? RefreshCredential(value: "refresh-new") : nil)
+            do {
+                _ = try await coordinator.request(path: "profile")
+                XCTFail("Expected signed-out state")
+            } catch SessionCoordinatorError.missingAccessToken {}
+        }
+    }
+
+    func testRevocationFencesRequestsWhileCredentialClearIsPending() async throws {
+        let fixture = SessionFixture()
+        let gate = StoreGate()
+        let store = BlockingClearStore(gate: gate)
+        let signOuts = RefreshRecorder()
+        let coordinator = try makeCoordinator(
+            fixture: fixture, store: store,
+            refresh: { _ in throw SessionServerError(statusCode: 500, code: "unexpected") },
+            onSignOut: { _ = await signOuts.record(RefreshCredential(value: "hook")) }
+        )
+        let forbidden = Task { try await coordinator.request(path: "forbidden") }
+        await gate.waitUntilEntered()
+        do {
+            _ = try await coordinator.request(path: "profile")
+            XCTFail("Expected fenced session")
+        } catch SessionCoordinatorError.missingAccessToken {}
+        let signOutsBeforeClear = await signOuts.count
+        XCTAssertEqual(signOutsBeforeClear, 0)
+        await gate.release()
+        do {
+            _ = try await forbidden.value
+            XCTFail("Expected forbidden response")
+        } catch let error as SessionServerError {
+            XCTAssertEqual(error, SessionServerError(statusCode: 403, code: "access_forbidden"))
+        }
+        let stored = try await store.load()
+        let signOutCount = await signOuts.count
+        XCTAssertNil(stored)
+        XCTAssertEqual(signOutCount, 1)
+    }
+
     func testTransientRefreshFailurePreservesCredential() async throws {
         for failure in [
             SessionServerError(statusCode: 503, code: "unavailable") as Error,
@@ -262,7 +375,7 @@ final class SessionCoordinatorTests: XCTestCase {
 
     private func makeCoordinator(
         fixture: SessionFixture,
-        store: InMemorySessionCredentialStore,
+        store: any SessionCredentialStore,
         refresh: @escaping SessionCoordinator.RefreshOperation,
         onSignOut: @escaping SessionCoordinator.SignOutHook = {}
     ) throws -> SessionCoordinator {
@@ -287,27 +400,97 @@ private actor RefreshRecorder {
     }
 }
 
+private enum CredentialStoreFailure: Error {
+    case clearFailed
+}
+
+private actor StoreGate {
+    private var entered = false
+    private var entryWaiters: [CheckedContinuation<Void, Never>] = []
+    private var releaseWaiter: CheckedContinuation<Void, Never>?
+
+    func pause() async {
+        entered = true
+        entryWaiters.forEach { $0.resume() }
+        entryWaiters.removeAll()
+        await withCheckedContinuation { releaseWaiter = $0 }
+    }
+
+    func waitUntilEntered() async {
+        if entered { return }
+        await withCheckedContinuation { entryWaiters.append($0) }
+    }
+
+    func release() {
+        releaseWaiter?.resume()
+        releaseWaiter = nil
+    }
+}
+
+private actor GatedCredentialStore: SessionCredentialStore {
+    private var credential: RefreshCredential? = RefreshCredential(value: "refresh-old")
+    private let gate: StoreGate
+    private let clearFails: Bool
+    private(set) var clearCount = 0
+
+    init(gate: StoreGate, clearFails: Bool) {
+        self.gate = gate
+        self.clearFails = clearFails
+    }
+
+    func load() async throws -> RefreshCredential? { credential }
+
+    func store(_ credential: RefreshCredential) async throws {
+        await gate.pause()
+        self.credential = credential
+    }
+
+    func clear() async throws {
+        clearCount += 1
+        if clearFails { throw CredentialStoreFailure.clearFailed }
+        credential = nil
+    }
+}
+
+private actor BlockingClearStore: SessionCredentialStore {
+    private var credential: RefreshCredential? = RefreshCredential(value: "refresh-old")
+    private let gate: StoreGate
+
+    init(gate: StoreGate) { self.gate = gate }
+    func load() async throws -> RefreshCredential? { credential }
+    func store(_ credential: RefreshCredential) async throws { self.credential = credential }
+    func clear() async throws {
+        await gate.pause()
+        credential = nil
+    }
+}
+
 private final class SessionFixture: @unchecked Sendable {
     private let lock = NSLock()
     private var count = 0
     private var refreshCount = 0
+    private var forbiddenCount = 0
     let initialStatus: Int
     let initialCode: String
     let replayStatus: Int
     let replayCode: String
+    let forbiddenDelay: TimeInterval
 
     init(initialStatus: Int = 401, initialCode: String = "invalid_session",
-         replayStatus: Int = 200, replayCode: String = "") {
+         replayStatus: Int = 200, replayCode: String = "", forbiddenDelay: TimeInterval = 0) {
         self.initialStatus = initialStatus
         self.initialCode = initialCode
         self.replayStatus = replayStatus
         self.replayCode = replayCode
+        self.forbiddenDelay = forbiddenDelay
     }
 
     var requestCount: Int { lock.withLock { count } }
     var refreshRequestCount: Int { lock.withLock { refreshCount } }
+    var forbiddenRequestCount: Int { lock.withLock { forbiddenCount } }
     func increment() { lock.withLock { count += 1 } }
     func incrementRefresh() { lock.withLock { refreshCount += 1 } }
+    func incrementForbidden() { lock.withLock { forbiddenCount += 1 } }
     func install() { SessionFixtureProtocol.fixture = self }
 }
 
@@ -322,6 +505,14 @@ private final class SessionFixtureProtocol: URLProtocol {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         guard let fixture = Self.fixture else { return }
+        if request.url?.lastPathComponent == "forbidden" {
+            fixture.incrementForbidden()
+            let delivery = DelayedProtocolDelivery(source: self)
+            DispatchQueue.global().asyncAfter(deadline: .now() + fixture.forbiddenDelay) {
+                delivery.sendForbidden()
+            }
+            return
+        }
         if request.url?.lastPathComponent == "refresh" {
             fixture.incrementRefresh()
             let authorized = request.httpMethod == "POST"
@@ -345,6 +536,18 @@ private final class SessionFixtureProtocol: URLProtocol {
         client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}
+}
+
+private struct DelayedProtocolDelivery: @unchecked Sendable {
+    let source: SessionFixtureProtocol
+
+    func sendForbidden() {
+        let body = Data(#"{"code":"access_forbidden"}"#.utf8)
+        let response = HTTPURLResponse(url: source.request.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!
+        source.client?.urlProtocol(source, didReceive: response, cacheStoragePolicy: .notAllowed)
+        source.client?.urlProtocol(source, didLoad: body)
+        source.client?.urlProtocolDidFinishLoading(source)
+    }
 }
 
 private final class FixtureState: @unchecked Sendable {
