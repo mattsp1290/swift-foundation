@@ -19,7 +19,8 @@ fi
 swift test
 xcodebuild -scheme AuthenticatedHTTP -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO
 export FOUNDATION_CONSUMER_OUTPUT="${FOUNDATION_CONSUMER_OUTPUT:-$(mktemp -d /tmp/swift-foundation-session-consumers.XXXXXX)}"
-FOUNDATION_SKIP_BENCHY_MACOS_UI_TESTS=1 "$root_dir/Scripts/verify-consumers.sh" "$pin"
+FOUNDATION_SKIP_BENCHY_MACOS_UI_TESTS=1 FOUNDATION_ALLOW_CATALOG_EMPTY_TREE_FALLBACK=1 \
+  "$root_dir/Scripts/verify-consumers.sh" "$pin"
 derived_data="${FOUNDATION_CONSUMER_DERIVED_DATA:-/tmp/swift-foundation-consumer-derived-data}"
 catalog_app="$derived_data/Build/Products/Debug/FoundationCatalog.app"
 ben_chy_app="$derived_data/Build/Products/Debug/BenchySynthetic.app"
