@@ -15,7 +15,10 @@ let package = Package(
         ),
     ],
     targets: [
-        .target(name: "AgentPresentation"),
+        .target(
+            name: "AgentPresentation",
+            dependencies: [.product(name: "AGUICore", package: "ag-ui-swift")]
+        ),
         .target(
             name: "AgentViews",
             dependencies: [
@@ -23,7 +26,10 @@ let package = Package(
                 .product(name: "AGUICore", package: "ag-ui-swift"),
             ]
         ),
-        .testTarget(name: "AgentPresentationTests", dependencies: ["AgentPresentation"]),
+        .testTarget(
+            name: "AgentPresentationTests",
+            dependencies: ["AgentPresentation", .product(name: "AGUICore", package: "ag-ui-swift")]
+        ),
         .testTarget(name: "AgentViewsTests", dependencies: ["AgentViews"]),
     ],
     swiftLanguageModes: [.v6]
