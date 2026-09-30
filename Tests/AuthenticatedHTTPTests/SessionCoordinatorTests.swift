@@ -253,6 +253,44 @@ final class SessionCoordinatorTests: XCTestCase {
         } catch SessionCoordinatorError.missingAccessToken {}
     }
 
+    func testStaleReplayUnauthorizedDoesNotRevokeNewerRefresh() async throws {
+        let fixture = SessionFixture(staleReplayDelay: 0.2)
+        let store = InMemorySessionCredentialStore()
+        try await store.store(RefreshCredential(value: "refresh-old"))
+        let refreshes = RefreshRecorder()
+        let signOuts = RefreshRecorder()
+        let coordinator = try makeCoordinator(
+            fixture: fixture, store: store,
+            refresh: { credential in
+                let attempt = await refreshes.record(credential)
+                return SessionRefreshResult(
+                    accessToken: attempt == 1 ? "access-new" : "access-latest",
+                    refreshCredential: RefreshCredential(value: attempt == 1 ? "refresh-new" : "refresh-latest")
+                )
+            },
+            onSignOut: { _ = await signOuts.record(RefreshCredential(value: "hook")) }
+        )
+        let staleRequest = Task { try await coordinator.request(path: "stale-replay") }
+        while fixture.staleReplayRequestCount == 0 { await Task.yield() }
+        _ = try await coordinator.request(path: "rotate")
+        let storedAfterSecondRefresh = try await store.load()
+        XCTAssertEqual(storedAfterSecondRefresh, RefreshCredential(value: "refresh-latest"))
+        do {
+            _ = try await staleRequest.value
+            XCTFail("Expected stale replay failure")
+        } catch let error as SessionServerError {
+            XCTAssertEqual(error, SessionServerError(statusCode: 401, code: "invalid_session"))
+        }
+        let (data, _) = try await coordinator.request(path: "latest")
+        let stored = try await store.load()
+        let refreshCount = await refreshes.count
+        let signOutCount = await signOuts.count
+        XCTAssertEqual(String(decoding: data, as: UTF8.self), "ok")
+        XCTAssertEqual(stored, RefreshCredential(value: "refresh-latest"))
+        XCTAssertEqual(refreshCount, 2)
+        XCTAssertEqual(signOutCount, 0)
+    }
+
     func testRevocationWaitsForCredentialWriteAndSignsOutWhenClearFails() async throws {
         for clearFails in [false, true] {
             let fixture = SessionFixture()
@@ -470,27 +508,33 @@ private final class SessionFixture: @unchecked Sendable {
     private var count = 0
     private var refreshCount = 0
     private var forbiddenCount = 0
+    private var staleReplayCount = 0
     let initialStatus: Int
     let initialCode: String
     let replayStatus: Int
     let replayCode: String
     let forbiddenDelay: TimeInterval
+    let staleReplayDelay: TimeInterval
 
     init(initialStatus: Int = 401, initialCode: String = "invalid_session",
-         replayStatus: Int = 200, replayCode: String = "", forbiddenDelay: TimeInterval = 0) {
+         replayStatus: Int = 200, replayCode: String = "", forbiddenDelay: TimeInterval = 0,
+         staleReplayDelay: TimeInterval = 0) {
         self.initialStatus = initialStatus
         self.initialCode = initialCode
         self.replayStatus = replayStatus
         self.replayCode = replayCode
         self.forbiddenDelay = forbiddenDelay
+        self.staleReplayDelay = staleReplayDelay
     }
 
     var requestCount: Int { lock.withLock { count } }
     var refreshRequestCount: Int { lock.withLock { refreshCount } }
     var forbiddenRequestCount: Int { lock.withLock { forbiddenCount } }
+    var staleReplayRequestCount: Int { lock.withLock { staleReplayCount } }
     func increment() { lock.withLock { count += 1 } }
     func incrementRefresh() { lock.withLock { refreshCount += 1 } }
     func incrementForbidden() { lock.withLock { forbiddenCount += 1 } }
+    func incrementStaleReplay() { lock.withLock { staleReplayCount += 1 } }
     func install() { SessionFixtureProtocol.fixture = self }
 }
 
@@ -509,7 +553,16 @@ private final class SessionFixtureProtocol: URLProtocol {
             fixture.incrementForbidden()
             let delivery = DelayedProtocolDelivery(source: self)
             DispatchQueue.global().asyncAfter(deadline: .now() + fixture.forbiddenDelay) {
-                delivery.sendForbidden()
+                delivery.send(statusCode: 403, code: "access_forbidden")
+            }
+            return
+        }
+        if request.url?.lastPathComponent == "stale-replay"
+            && request.value(forHTTPHeaderField: "Authorization") == "Bearer access-new" {
+            fixture.incrementStaleReplay()
+            let delivery = DelayedProtocolDelivery(source: self)
+            DispatchQueue.global().asyncAfter(deadline: .now() + fixture.staleReplayDelay) {
+                delivery.send(statusCode: 401, code: "invalid_session")
             }
             return
         }
@@ -526,6 +579,16 @@ private final class SessionFixtureProtocol: URLProtocol {
             return
         }
         fixture.increment()
+        if request.url?.lastPathComponent == "rotate" {
+            let latest = request.value(forHTTPHeaderField: "Authorization") == "Bearer access-latest"
+            send(statusCode: latest ? 200 : 401, code: latest ? nil : "invalid_session")
+            return
+        }
+        if request.url?.lastPathComponent == "latest" {
+            let latest = request.value(forHTTPHeaderField: "Authorization") == "Bearer access-latest"
+            send(statusCode: latest ? 200 : 401, code: latest ? nil : "invalid_session")
+            return
+        }
         let replay = request.value(forHTTPHeaderField: "Authorization") == "Bearer access-new"
         let status = replay ? fixture.replayStatus : fixture.initialStatus
         let code = replay ? fixture.replayCode : fixture.initialCode
@@ -536,14 +599,22 @@ private final class SessionFixtureProtocol: URLProtocol {
         client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}
+
+    private func send(statusCode: Int, code: String?) {
+        let body = code.map { Data(#"{"code":"\#($0)"}"#.utf8) } ?? Data("ok".utf8)
+        let response = HTTPURLResponse(url: request.url!, statusCode: statusCode, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: body)
+        client?.urlProtocolDidFinishLoading(self)
+    }
 }
 
 private struct DelayedProtocolDelivery: @unchecked Sendable {
     let source: SessionFixtureProtocol
 
-    func sendForbidden() {
-        let body = Data(#"{"code":"access_forbidden"}"#.utf8)
-        let response = HTTPURLResponse(url: source.request.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!
+    func send(statusCode: Int, code: String) {
+        let body = Data(#"{"code":"\#(code)"}"#.utf8)
+        let response = HTTPURLResponse(url: source.request.url!, statusCode: statusCode, httpVersion: nil, headerFields: nil)!
         source.client?.urlProtocol(source, didReceive: response, cacheStoragePolicy: .notAllowed)
         source.client?.urlProtocol(source, didLoad: body)
         source.client?.urlProtocolDidFinishLoading(source)

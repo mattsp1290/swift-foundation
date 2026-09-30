@@ -95,12 +95,14 @@ public actor SessionCoordinator {
             guard let replayToken = self.accessToken else {
                 throw SessionCoordinatorError.missingAccessToken
             }
+            let replayGeneration = tokenGeneration
             let (replayData, replayResponse) = try await client.request(
                 path: path, method: method, accessToken: replayToken, body: body
             )
             let replayError = SessionServerError(response: replayResponse, data: replayData)
             if Self.isRevocation(replayError) {
-                try await revokeSession()
+                // A stale replay must not revoke a newer successful refresh.
+                try await revokeSession(for: replayGeneration)
             }
             guard (200..<300).contains(replayResponse.statusCode) else {
                 throw replayError
@@ -171,14 +173,15 @@ public actor SessionCoordinator {
             || (error.statusCode == 403 && error.code == "access_forbidden")
     }
 
-    /// `generation` is used only for refresh failures. A protected forbidden
-    /// response revokes the current session even if a refresh just completed.
+    /// Refresh failures and replay responses revoke only their own generation.
+    /// A direct protected forbidden response revokes the current session even
+    /// if a refresh completed while that request was in flight.
     private func revokeSession(for generation: UInt64? = nil) async throws {
+        if let generation, tokenGeneration != generation { return }
         if let revocationTask {
             try await revocationTask.value
             return
         }
-        if let generation, tokenGeneration != generation { return }
         guard accessToken != nil else { return }
         // Fence protected requests and refresh commits before awaiting storage.
         accessToken = nil
