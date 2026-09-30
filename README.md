@@ -28,7 +28,7 @@ The SDK's public decoding and reduction stay upstream of this boundary. The proj
 
 ## Synthetic host
 
-Open `AgentConversationView_Previews` in Xcode for a compiled synthetic host, or paste this view into a macOS or iOS SwiftUI app that depends on both library products. The two initial messages show selectable text. Enter a message and tap Send (or press Return); each enabled submission invokes the callback once and adds one user message.
+Open `AgentConversationView_Previews` in Xcode for a compiled synthetic host, or paste this view into a macOS or iOS SwiftUI app that depends on both library products. The two initial messages show selectable text. Enter a message and tap Send (or press Command-Return); each enabled submission invokes the callback once and adds one user message.
 
 ```swift
 import AgentPresentation
@@ -66,7 +66,7 @@ After a candidate commit is published to the public GitHub URL, run on a Mac wit
 Scripts/verify-consumers.sh <published-40-character-swift-foundation-commit-SHA>
 ```
 
-The script generates an isolated Xcode project under `/tmp`, with one SwiftPM dependency: `https://github.com/mattsp1290/swift-foundation.git` at the supplied immutable revision. There are no sibling checkout paths or package overrides. It builds both apps for macOS and iPhone Simulator, launches each Mac executable, installs and launches each simulator app, and leaves the generated project and per-target logs in the printed output directory. Set `FOUNDATION_CONSUMER_OUTPUT` to retain it at a chosen path. The package itself pins AG-UI SDK revision `9412aab2549e06e165ada85fe6346b9b6e5a0f2b`. The generated app schemes are `FoundationCatalog_macOS`, `FoundationCatalog_iOS`, `BenchySynthetic_macOS`, and `BenchySynthetic_iOS`.
+The script generates an isolated Xcode project under `/tmp`, with one SwiftPM dependency: `https://github.com/mattsp1290/swift-foundation.git` at the supplied immutable revision. There are no sibling checkout paths or package overrides. It builds both apps for macOS and iPhone Simulator, launches each Mac executable, installs and launches each simulator app, then runs each scheme's XCUITest suite. It leaves the generated project and per-target logs in the printed output directory. Set `FOUNDATION_CONSUMER_OUTPUT` to retain it at a chosen path. The package itself pins AG-UI SDK revision `9412aab2549e06e165ada85fe6346b9b6e5a0f2b`. The generated app schemes are `FoundationCatalog_macOS`, `FoundationCatalog_iOS`, `BenchySynthetic_macOS`, and `BenchySynthetic_iOS`.
 
 The transcript uses `agent-transcript` and `agent-message-<id>` accessibility identifiers; the draft, send, Stop, Retry, and status use `agent-composer-draft`, `agent-composer-send`, `agent-stop`, `agent-retry`, and `agent-status`. The catalog and Benchy callback count labels have `catalog-callback-counts-<title>` and `ben-chy-callback-counts` identifiers. Use these with Xcode's Accessibility Inspector or UI automation. The catalog provides stale, unavailable, live, disconnect, and failed controls for manual acceptance; the Benchy host provides complete, fail, and connection controls. Verify a multiline draft, one Send callback, disabled Send while pending or offline, one Stop/Retry callback, copy/select, VoiceOver labels, keyboard navigation, light/dark, narrow iPhone layout, and 200% Dynamic Type in the running apps.
 
@@ -76,4 +76,6 @@ Maintainer: Matt Spurlin. License: MIT, see `LICENSE`. This package's public sou
 
 ## Verification record
 
-On 2026-09-29, `swift test` passed on macOS with Xcode 26.2 / Swift 6.2.3. A temporary XcodeGen project using a local package path for pre-publication compile verification built the catalog and synthetic Benchy host on macOS and iOS Simulator. Run the URL-only script above with the published candidate SHA for definitive independent-consumer verification; the script cannot pin an unpublished source revision.
+On 2026-09-29, `swift test` and the `AgentViews` iOS Simulator package build passed with Xcode 26.2 / Swift 6.2.3 on the published candidate `f2855978e92d2ac3f61c6425d499b5a7db26e921`. An isolated XcodeGen project resolved that candidate from the public GitHub URL and the qualified AG-UI SDK revision. Both iPhone 16 Pro Simulator XCUITest suites passed. Both macOS apps built, launched, and logged the exact candidate SHA; a direct UI run exercised Send, Stop, Retry, pending-disabled state, stale/unavailable notices, keyboard submission, and separate catalog instances.
+
+The macOS XCUITest runner intermittently failed to attach the app window during repeated launches on this verification machine, so the full script did not pass there. The macOS controls were exercised in the running apps instead. VoiceOver speech navigation and the complete keyboard tab order remain manual acceptance checks. Re-run the URL-only script with the revision being accepted; its pin must already be published.
