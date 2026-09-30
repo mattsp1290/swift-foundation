@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 struct FoundationRevision: View {
@@ -7,6 +8,6 @@ struct FoundationRevision: View {
             .foregroundStyle(.secondary)
             .textSelection(.enabled)
             .accessibilityLabel("swift-foundation Git revision and dependency pin __FOUNDATION_PIN__")
-            .onAppear { print("swift-foundation Git SHA / SwiftPM pin: __FOUNDATION_PIN__") }
+            .onAppear { NSLog("swift-foundation Git SHA / SwiftPM pin: __FOUNDATION_PIN__") }
     }
 }
