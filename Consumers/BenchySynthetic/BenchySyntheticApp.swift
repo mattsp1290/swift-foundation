@@ -4,6 +4,8 @@ import SwiftUI
 
 @main
 struct BenchySyntheticApp: App {
+    init() { logFoundationRevision() }
+
     var body: some Scene {
         WindowGroup {
             BenchySyntheticHost()

@@ -4,6 +4,8 @@ import SwiftUI
 
 @main
 struct CatalogApp: App {
+    init() { logFoundationRevision() }
+
     var body: some Scene {
         WindowGroup {
             NavigationStack {
