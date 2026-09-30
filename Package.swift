@@ -34,9 +34,9 @@ let package = Package(
         ),
         .testTarget(name: "AgentViewsTests", dependencies: ["AgentViews"]),
         .target(name: "SessionCredentials"),
-        .target(name: "AuthenticatedHTTP"),
+        .target(name: "AuthenticatedHTTP", dependencies: ["SessionCredentials"]),
         .testTarget(name: "SessionCredentialsTests", dependencies: ["SessionCredentials"]),
-        .testTarget(name: "AuthenticatedHTTPTests", dependencies: ["AuthenticatedHTTP"]),
+        .testTarget(name: "AuthenticatedHTTPTests", dependencies: ["AuthenticatedHTTP", "SessionCredentials"]),
     ],
     swiftLanguageModes: [.v6]
 )
