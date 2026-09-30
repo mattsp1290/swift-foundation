@@ -45,6 +45,7 @@ private struct CatalogConversation: View {
                 Button("Disconnect") {
                     connection = connection == .connected ? .disconnected : .connected
                 }
+                Button("Mark failed") { run = .failed }
             }
             .buttonStyle(.bordered)
             AgentConversationView(
@@ -78,8 +79,6 @@ private struct CatalogConversation: View {
             Text("Callbacks: send \(sendCallbacks), stop \(stopCallbacks), retry \(retryCallbacks)")
                 .font(.caption)
                 .accessibilityIdentifier("catalog-callback-counts-\(title)")
-            Button("Mark failed") { run = .failed }
-                .buttonStyle(.bordered)
         }
         .padding(8)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))

@@ -9,6 +9,12 @@ private func element(_ app: XCUIApplication, _ identifier: String, index: Int = 
 }
 
 @MainActor
+private func accessibleText(_ element: XCUIElement) -> String {
+    let value = element.value as? String ?? ""
+    return value.isEmpty ? element.label : value
+}
+
+@MainActor
 private func assertPin(_ app: XCUIApplication) {
     let label = "swift-foundation Git revision and dependency pin __FOUNDATION_PIN__"
     XCTAssertTrue(app.staticTexts[label].waitForExistence(timeout: 15), "Runtime pin must be visible")
@@ -18,7 +24,7 @@ private func assertPin(_ app: XCUIApplication) {
 private func assertCount(_ app: XCUIApplication, identifier: String, send: Int, stop: Int, retry: Int) {
     let counter = element(app, identifier)
     XCTAssertTrue(counter.waitForExistence(timeout: 10))
-    XCTAssertEqual(counter.label, "Callbacks: send \(send), stop \(stop), retry \(retry)")
+    XCTAssertEqual(accessibleText(counter), "Callbacks: send \(send), stop \(stop), retry \(retry)")
 }
 
 #if CATALOG
@@ -31,8 +37,8 @@ final class CatalogUITests: XCTestCase {
         XCTAssertTrue(element(app, "agent-status").waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Connected"].firstMatch.exists)
         XCTAssertTrue(element(app, "agent-message-seed").exists)
-        XCTAssertEqual(element(app, "agent-message-seed", index: 0).label, "Assistant: Selectable sample text")
-        XCTAssertEqual(element(app, "agent-message-seed", index: 1).label, "You: Selectable sample text")
+        XCTAssertEqual(accessibleText(element(app, "agent-message-seed", index: 0)), "Assistant: Selectable sample text")
+        XCTAssertEqual(accessibleText(element(app, "agent-message-seed", index: 1)), "You: Selectable sample text")
         assertCount(app, identifier: "catalog-callback-counts-Connected", send: 0, stop: 0, retry: 0)
         assertCount(app, identifier: "catalog-callback-counts-Second instance", send: 0, stop: 0, retry: 0)
 
@@ -55,7 +61,9 @@ final class CatalogUITests: XCTestCase {
         assertCount(app, identifier: "catalog-callback-counts-Connected", send: 1, stop: 1, retry: 0)
         XCTAssertFalse(stop.exists)
 
-        app.buttons["Mark failed"].firstMatch.tap()
+        let markFailed = app.buttons["Mark failed"].firstMatch
+        XCTAssertTrue(markFailed.isHittable)
+        markFailed.tap()
         XCTAssertTrue(app.staticTexts["Sample response failed"].firstMatch.waitForExistence(timeout: 5))
         let retry = element(app, "agent-retry")
         XCTAssertTrue(retry.waitForExistence(timeout: 5))
