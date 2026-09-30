@@ -1,0 +1,159 @@
+import XCTest
+#if os(macOS)
+import AppKit
+#endif
+
+@MainActor
+private func element(_ app: XCUIApplication, _ identifier: String, index: Int = 0) -> XCUIElement {
+    app.descendants(matching: .any).matching(identifier: identifier).element(boundBy: index)
+}
+
+@MainActor
+private func assertPin(_ app: XCUIApplication) {
+    let label = "swift-foundation Git revision and dependency pin __FOUNDATION_PIN__"
+    XCTAssertTrue(app.staticTexts[label].waitForExistence(timeout: 15), "Runtime pin must be visible")
+}
+
+@MainActor
+private func assertCount(_ app: XCUIApplication, identifier: String, send: Int, stop: Int, retry: Int) {
+    let counter = element(app, identifier)
+    XCTAssertTrue(counter.waitForExistence(timeout: 10))
+    XCTAssertEqual(counter.label, "Callbacks: send \(send), stop \(stop), retry \(retry)")
+}
+
+#if CATALOG
+final class CatalogUITests: XCTestCase {
+    @MainActor
+    func testTwoInstancesAndControlledActions() {
+        let app = XCUIApplication()
+        app.launch()
+        assertPin(app)
+        XCTAssertTrue(element(app, "agent-status").waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Connected"].firstMatch.exists)
+        XCTAssertTrue(element(app, "agent-message-seed").exists)
+        XCTAssertEqual(element(app, "agent-message-seed", index: 0).label, "Assistant: Selectable sample text")
+        XCTAssertEqual(element(app, "agent-message-seed", index: 1).label, "You: Selectable sample text")
+        assertCount(app, identifier: "catalog-callback-counts-Connected", send: 0, stop: 0, retry: 0)
+        assertCount(app, identifier: "catalog-callback-counts-Second instance", send: 0, stop: 0, retry: 0)
+
+        let draft = element(app, "agent-composer-draft")
+        XCTAssertTrue(draft.waitForExistence(timeout: 10))
+        draft.tap()
+        draft.typeText("first line\nsecond line")
+        assertCount(app, identifier: "catalog-callback-counts-Connected", send: 0, stop: 0, retry: 0)
+        let send = element(app, "agent-composer-send")
+        XCTAssertTrue(send.isEnabled)
+        send.tap()
+        assertCount(app, identifier: "catalog-callback-counts-Connected", send: 1, stop: 0, retry: 0)
+        assertCount(app, identifier: "catalog-callback-counts-Second instance", send: 0, stop: 0, retry: 0)
+        XCTAssertFalse(send.isEnabled, "Pending run disables Send")
+        XCTAssertTrue(app.staticTexts["Response pending"].firstMatch.exists)
+
+        let stop = element(app, "agent-stop")
+        XCTAssertTrue(stop.waitForExistence(timeout: 10))
+        stop.tap()
+        assertCount(app, identifier: "catalog-callback-counts-Connected", send: 1, stop: 1, retry: 0)
+        XCTAssertFalse(stop.exists)
+
+        app.buttons["Mark failed"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Sample response failed"].firstMatch.waitForExistence(timeout: 5))
+        let retry = element(app, "agent-retry")
+        XCTAssertTrue(retry.waitForExistence(timeout: 5))
+        retry.tap()
+        assertCount(app, identifier: "catalog-callback-counts-Connected", send: 1, stop: 1, retry: 1)
+        XCTAssertFalse(retry.exists)
+    }
+
+    @MainActor
+    func testAccessibilityStatusAndLargeTypeLayout() {
+        let app = XCUIApplication()
+        #if os(iOS)
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"]
+        #endif
+        app.launch()
+        assertPin(app)
+        XCTAssertTrue(element(app, "agent-status").waitForExistence(timeout: 10))
+        app.buttons["Stale"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Transcript may be out of date"].firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["2 messages omitted"].firstMatch.exists)
+        app.buttons["Unavailable"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Live transcript unavailable"].firstMatch.exists)
+        let send = element(app, "agent-composer-send")
+        XCTAssertTrue(send.exists && send.isHittable)
+        app.buttons["Disconnect"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Disconnected"].firstMatch.exists)
+        XCTAssertFalse(send.isEnabled)
+        XCTAssertTrue(element(app, "agent-message-seed").exists)
+    }
+
+    @MainActor
+    func testSelectableText() {
+        let app = XCUIApplication()
+        app.launch()
+        let message = element(app, "agent-message-seed")
+        XCTAssertTrue(message.waitForExistence(timeout: 10))
+        #if os(macOS)
+        importCopyFromMac(message, app: app)
+        #else
+        message.press(forDuration: 1.2)
+        XCTAssertTrue(app.buttons["Copy"].waitForExistence(timeout: 5) || app.menuItems["Copy"].exists)
+        #endif
+    }
+
+    #if os(macOS)
+    @MainActor
+    private func importCopyFromMac(_ message: XCUIElement, app: XCUIApplication) {
+        NSPasteboard.general.clearContents()
+        message.doubleClick()
+        app.typeKey("c", modifierFlags: .command)
+        XCTAssertFalse((NSPasteboard.general.string(forType: .string) ?? "").isEmpty)
+    }
+    #endif
+}
+#endif
+
+#if BENCHY
+final class BenchyUITests: XCTestCase {
+    @MainActor
+    func testSendStopFailureRetryAndPin() {
+        let app = XCUIApplication()
+        app.launch()
+        assertPin(app)
+        XCTAssertTrue(element(app, "agent-status").waitForExistence(timeout: 10))
+        assertCount(app, identifier: "ben-chy-callback-counts", send: 0, stop: 0, retry: 0)
+        let draft = element(app, "agent-composer-draft")
+        XCTAssertTrue(draft.waitForExistence(timeout: 10))
+        draft.tap()
+        draft.typeText("synthetic question")
+        let send = element(app, "agent-composer-send")
+        send.tap()
+        assertCount(app, identifier: "ben-chy-callback-counts", send: 1, stop: 0, retry: 0)
+        XCTAssertFalse(send.isEnabled)
+        let stop = element(app, "agent-stop")
+        XCTAssertTrue(stop.waitForExistence(timeout: 5))
+        stop.tap()
+        assertCount(app, identifier: "ben-chy-callback-counts", send: 1, stop: 1, retry: 0)
+        app.buttons["Fail response"].tap()
+        XCTAssertTrue(app.staticTexts["Synthetic request failed. Retry is available."].exists)
+        let retry = element(app, "agent-retry")
+        XCTAssertTrue(retry.waitForExistence(timeout: 5))
+        retry.tap()
+        assertCount(app, identifier: "ben-chy-callback-counts", send: 1, stop: 1, retry: 1)
+        XCTAssertFalse(retry.exists)
+    }
+
+    #if os(macOS)
+    @MainActor
+    func testCommandReturnSends() {
+        let app = XCUIApplication()
+        app.launch()
+        let draft = element(app, "agent-composer-draft")
+        XCTAssertTrue(draft.waitForExistence(timeout: 10))
+        draft.tap()
+        draft.typeText("keyboard question")
+        app.typeKey(XCUIKeyboardKey.return, modifierFlags: .command)
+        assertCount(app, identifier: "ben-chy-callback-counts", send: 1, stop: 0, retry: 0)
+    }
+    #endif
+}
+#endif
